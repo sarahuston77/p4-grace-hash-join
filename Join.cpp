@@ -84,43 +84,75 @@ vector<uint> probe(Disk* disk, Mem* mem, vector<Bucket>& partitions) {
 	Page* outputPage = mem -> mem_page(MEM_SIZE_IN_PAGE - 1);
 
 	for (uint bucket = 0; bucket < MEM_SIZE_IN_PAGE - 1; bucket++){
-		
-		for (uint pageid : partitions[bucket].get_left_rel()){
-			mem -> loadFromDisk(disk, pageid, MEM_SIZE_IN_PAGE - 2); // load into input page
-			
-			for (uint leftRecordId = 0; leftRecordId < inputPage -> size(); leftRecordId++){
-				Record leftRecord = inputPage -> get_record(leftRecordId);
-				uint hashBucket = leftRecord.probe_hash() % (MEM_SIZE_IN_PAGE - 2);
-				Page* hashedPage = mem -> mem_page(hashBucket);
-				hashedPage -> loadRecord(leftRecord);
-			}
-		}
-
-		inputPage -> reset();
-
-		for (uint pageid : partitions[bucket].get_right_rel()){
-			mem -> loadFromDisk(disk, pageid, MEM_SIZE_IN_PAGE - 2); // load into input page
-			
-			for (uint rightRecordId = 0; rightRecordId < inputPage -> size(); rightRecordId++){
-				Record rightRecord = inputPage -> get_record(rightRecordId);
-				uint hashBucket = rightRecord.probe_hash() % (MEM_SIZE_IN_PAGE - 2);
-				Page* hashedPage = mem -> mem_page(hashBucket);
+		if (partitions[bucket].num_left_rel_record <= partitions[bucket].num_right_rel_record){ // LEFT SMALLER -> outer = first
+			for (uint pageid : partitions[bucket].get_left_rel()){
+				mem -> loadFromDisk(disk, pageid, MEM_SIZE_IN_PAGE - 2); // load into input page
 				
-				for (uint leftRecordId = 0; leftRecordId < hashedPage -> size(); leftRecordId++){
-					Record leftRecord = hashedPage -> get_record(leftRecordId);
-					if (leftRecord == rightRecord){
-						if (outputPage -> full()){
-							uint writtenPage = mem -> flushToDisk(disk, MEM_SIZE_IN_PAGE - 1);
-							disk_pages.push_back(writtenPage);
-						}
+				for (uint leftRecordId = 0; leftRecordId < inputPage -> size(); leftRecordId++){
+					Record leftRecord = inputPage -> get_record(leftRecordId);
+					uint hashBucket = leftRecord.probe_hash() % (MEM_SIZE_IN_PAGE - 2);
+					Page* hashedPage = mem -> mem_page(hashBucket);
+					hashedPage -> loadRecord(leftRecord);
+				}
+			}
 
-						outputPage -> loadPair(leftRecord, rightRecord);
+			for (uint pageid : partitions[bucket].get_right_rel()){
+				mem -> loadFromDisk(disk, pageid, MEM_SIZE_IN_PAGE - 2); // load into input page
+				
+				for (uint rightRecordId = 0; rightRecordId < inputPage -> size(); rightRecordId++){
+					Record rightRecord = inputPage -> get_record(rightRecordId);
+					uint hashBucket = rightRecord.probe_hash() % (MEM_SIZE_IN_PAGE - 2);
+					Page* hashedPage = mem -> mem_page(hashBucket);
+					
+					for (uint leftRecordId = 0; leftRecordId < hashedPage -> size(); leftRecordId++){
+						Record leftRecord = hashedPage -> get_record(leftRecordId);
+						if (leftRecord == rightRecord){
+							if (outputPage -> full()){
+								uint writtenPage = mem -> flushToDisk(disk, MEM_SIZE_IN_PAGE - 1);
+								disk_pages.push_back(writtenPage);
+							}
+
+							outputPage -> loadPair(leftRecord, rightRecord);
+						}
+					}
+				}
+			}
+		}else{
+			for (uint pageid : partitions[bucket].get_right_rel()){
+				mem -> loadFromDisk(disk, pageid, MEM_SIZE_IN_PAGE - 2); // load into input page
+				
+				for (uint rightRecordId = 0; rightRecordId < inputPage -> size(); rightRecordId++){
+					Record rightRecord = inputPage -> get_record(rightRecordId);
+					uint hashBucket = rightRecord.probe_hash() % (MEM_SIZE_IN_PAGE - 2);
+					Page* hashedPage = mem -> mem_page(hashBucket);
+					hashedPage -> loadRecord(rightRecord);
+				}
+			}
+
+			for (uint pageid : partitions[bucket].get_left_rel()){
+				mem -> loadFromDisk(disk, pageid, MEM_SIZE_IN_PAGE - 2); // load into input page
+				
+				for (uint leftRecordId = 0; leftRecordId < inputPage -> size(); leftRecordId++){
+					Record leftRecord = inputPage -> get_record(leftRecordId);
+					uint hashBucket = leftRecord.probe_hash() % (MEM_SIZE_IN_PAGE - 2);
+					Page* hashedPage = mem -> mem_page(hashBucket);
+					
+					for (uint rightRecordId = 0; rightRecordId < hashedPage -> size(); rightRecordId++){
+						Record rightRecord = hashedPage -> get_record(rightRecordId);
+						if (leftRecord == rightRecord){
+							if (outputPage -> full()){
+								uint writtenPage = mem -> flushToDisk(disk, MEM_SIZE_IN_PAGE - 1);
+								disk_pages.push_back(writtenPage);
+							}
+
+							outputPage -> loadPair(leftRecord, rightRecord);
+						}
 					}
 				}
 			}
 		}
-
-		for (uint bucket = 0; bucket < MEM_SIZE_IN_PAGE - 2; bucket++){
+		
+		for (uint bucket = 0; bucket <= MEM_SIZE_IN_PAGE - 2; bucket++){
 			mem -> mem_page(bucket) -> reset(); // clear 2nd hash function after each partition
 		}
 	}
